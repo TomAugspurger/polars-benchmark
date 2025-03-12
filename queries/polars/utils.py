@@ -1,7 +1,7 @@
 import pathlib
 import tempfile
 from functools import partial
-from typing import Literal
+from typing import Any
 
 import polars as pl
 
@@ -73,15 +73,13 @@ def _preload_engine(engine):
         pl.scan_parquet(f).collect(engine=engine)
 
 
-def obtain_engine_config() -> (
-    pl.GPUEngine | Literal["in-memory", "streaming", "old-streaming"]
-):
+def obtain_engine_config() -> dict[str, Any]:
     if settings.run.polars_streaming:
-        return "old-streaming"
+        return {"engine": "cpu"}
     if settings.run.polars_new_streaming:
-        return "streaming"
+        return {"engine": "cpu", "new_streaming": True}
     if not settings.run.polars_gpu:
-        return "in-memory"
+        return {"engine": "in-memory"}
 
     import cudf_polars
     import rmm
@@ -129,7 +127,7 @@ def obtain_engine_config() -> (
             ]:
                 plc.experimental.enable_prefetching(typ)
 
-        return pl.GPUEngine(device=device, memory_resource=mr, raise_on_fail=True)
+        return {"engine": pl.GPUEngine(device=device, memory_resource=mr, raise_on_fail=True)}
 
 
 def run_query(query_number: int, lf: pl.LazyFrame) -> None:
@@ -142,16 +140,17 @@ def run_query(query_number: int, lf: pl.LazyFrame) -> None:
         msg = "Please specify at most one of eager, streaming, new_streaming or gpu"
         raise ValueError(msg)
 
-    engine = obtain_engine_config()
+
+    collect_kwargs = obtain_engine_config()
     if settings.run.polars_show_plan:
-        print(lf.explain(engine=engine, optimized=not eager))
+        print(lf.explain(**collect_kwargs, optimized=not eager))
 
     # Eager load engine backend, so we don't time that.
-    _preload_engine(engine)
+    _preload_engine(collect_kwargs.get("engine"))
     query = partial(
         lf.collect,
         no_optimization=eager,
-        engine=engine,
+        **collect_kwargs,
     )
 
     if gpu:
