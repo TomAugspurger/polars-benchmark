@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal, TypeAlias
 
-from pydantic import computed_field
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 IoType: TypeAlias = Literal["skip", "parquet", "feather", "csv"]
@@ -21,6 +21,30 @@ class Paths(BaseSettings):
     )
 
 
+class LibCUDFEngineExecutorOptions(BaseSettings):
+    ...
+
+class DaskEngineExecutorOptions(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="run_polars_dask_")
+    parquet_blocksize: int = 1_000**3
+    shuffle_method: Literal["rapidsmp", "tasks"] = "tasks"
+    # bcast_join_limit": 2 if executor == "dask-cuda" else 32,
+    # cardinality_factor: dict[str, float] = Field()
+    # cardinality_factor": {
+    #     "c_custkey": 0.05,
+    #     "c_orderkey": 0.5,
+    #     "l_orderkey": 1.0,
+    # },
+
+class DaskClusterOptions(BaseSettings):
+    n_workers: int = 1
+    """The number of workers to use for the Dask cluster."""
+    dashboard_address: str = ":8585"
+    """The address to use for the Dask dashboard."""
+    protocol: Literal["ucx", "tcp"] = "ucx"
+    """The protocol to use for the Dask cluster."""
+
+
 class Run(BaseSettings):
     io_type: IoType = "parquet"
 
@@ -33,7 +57,21 @@ class Run(BaseSettings):
     polars_streaming: bool = False
     polars_new_streaming: bool = False
     polars_gpu: bool = False  # Use GPU engine?
+    polars_multi_gpu: bool = False  # Use multi-GPU engine?
+    polars_gpu_executor: Literal["dask-experimental", "pylibcudf"] = "pylibcudf"
     polars_gpu_device: int = 0  # The GPU device to run on for polars GPU
+    dask_cluster_options: DaskClusterOptions = Field(
+        default_factory=DaskClusterOptions
+    )
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def polars_gpu_executor_options(self) -> DaskEngineExecutorOptions | LibCUDFEngineExecutorOptions:
+        if self.polars_multi_gpu:
+            return DaskEngineExecutorOptions()
+        else:
+            return LibCUDFEngineExecutorOptions()
+
     # Which style of GPU memory resource to use
     # cuda -> cudaMalloc
     # cuda-pool -> Pool suballocator wrapped around cudaMalloc

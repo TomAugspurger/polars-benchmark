@@ -64,6 +64,29 @@ def get_part_supp_ds() -> pl.LazyFrame:
 
 
 def _preload_engine(engine):
+    if settings.run.polars_multi_gpu:
+        cluster_options = settings.run.dask_cluster_options.model_dump()
+        try:
+            from rapidsmp.integrations.dask import (
+                LocalRMPCluster,
+                bootstrap_dask_cluster,
+            )
+
+            cluster = LocalRMPCluster(**cluster_options)
+            client = cluster.get_client()
+            client.wait_for_workers(cluster_options["n_workers"])
+            bootstrap_dask_cluster(
+                client,
+                pool_size=0.8,
+                spill_device=0.5,
+            )
+        except ImportError:
+            from dask_cuda import LocalCUDACluster
+
+            cluster = LocalCUDACluster(**cluster_options)
+            client = cluster.get_client()
+            client.wait_for_workers(cluster_options["n_workers"])
+
     with tempfile.TemporaryDirectory() as tmpdir:
         # GPU engine has one-time lazy-loaded cost in IO, which we
         # remove from timings here.
@@ -81,53 +104,76 @@ def obtain_engine_config() -> dict[str, Any]:
     if not settings.run.polars_gpu:
         return {"engine": "in-memory"}
 
-    import cudf_polars
-    import rmm
-    from cudf_polars.callback import set_device
-    from packaging import version
+    if settings.run.polars_multi_gpu:
+        return {
+            "engine": pl.GPUEngine(
+                raise_on_fail=True,
+                executor_options=settings.run.polars_gpu_executor_options.model_dump(),
+                executor=settings.run.polars_gpu_executor,
+            )
+        }
 
-    if version.parse(cudf_polars.__version__) < version.Version("24.10"):
-        import cudf._lib.pylibcudf as plc
     else:
-        import pylibcudf as plc
+        # single GPU
+        executor_options = settings.run.polars_gpu_executor_options.model_dump()
 
-    device = settings.run.polars_gpu_device
-    mr_type = settings.run.use_rmm_mr
-    with set_device(device):
-        # Must make sure to create memory resource on the requested device
-        free_memory, _ = rmm.mr.available_device_memory()
-        # Pick an initial pool of around 80% of the free device
-        # memory, must be multiple of 256
-        initial_pool_size = 256 * (int(free_memory * 0.8) // 256)
-        if mr_type == "cuda":
-            mr = rmm.mr.CudaMemoryResource()
-        elif mr_type == "cuda-pool":
-            mr = rmm.mr.PoolMemoryResource(
-                rmm.mr.CudaMemoryResource(), initial_pool_size=initial_pool_size
-            )
-        elif mr_type == "cuda-async":
-            mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=initial_pool_size)
-        elif mr_type == "managed":
-            mr = rmm.mr.ManagedMemoryResource()
-        elif mr_type == "managed-pool":
-            mr = rmm.mr.PrefetchResourceAdaptor(
-                rmm.mr.PoolMemoryResource(
-                    rmm.mr.ManagedMemoryResource(), initial_pool_size=initial_pool_size
-                )
-            )
+        import cudf_polars
+        import rmm
+        from cudf_polars.callback import set_device
+        from packaging import version
+
+        if version.parse(cudf_polars.__version__) < version.Version("24.10"):
+            import cudf._lib.pylibcudf as plc
         else:
-            msg = "Unknown memory resource type"
-            raise RuntimeError(msg)
-        if mr_type in ("managed", "managed-pool"):
-            for typ in [
-                "column_view::get_data",
-                "mutable_column_view::get_data",
-                "gather",
-                "hash_join",
-            ]:
-                plc.experimental.enable_prefetching(typ)
+            import pylibcudf as plc
 
-        return {"engine": pl.GPUEngine(device=device, memory_resource=mr, raise_on_fail=True)}
+        device = settings.run.polars_gpu_device
+        mr_type = settings.run.use_rmm_mr
+        # This needs t move to preload_engine, after dask-cuda?
+        with set_device(device):
+            # Must make sure to create memory resource on the requested device
+            free_memory, _ = rmm.mr.available_device_memory()
+            # Pick an initial pool of around 80% of the free device
+            # memory, must be multiple of 256
+            initial_pool_size = 256 * (int(free_memory * 0.8) // 256)
+            if mr_type == "cuda":
+                mr = rmm.mr.CudaMemoryResource()
+            elif mr_type == "cuda-pool":
+                mr = rmm.mr.PoolMemoryResource(
+                    rmm.mr.CudaMemoryResource(), initial_pool_size=initial_pool_size
+                )
+            elif mr_type == "cuda-async":
+                mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=initial_pool_size)
+            elif mr_type == "managed":
+                mr = rmm.mr.ManagedMemoryResource()
+            elif mr_type == "managed-pool":
+                mr = rmm.mr.PrefetchResourceAdaptor(
+                    rmm.mr.PoolMemoryResource(
+                        rmm.mr.ManagedMemoryResource(),
+                        initial_pool_size=initial_pool_size,
+                    )
+                )
+            else:
+                msg = "Unknown memory resource type"
+                raise RuntimeError(msg)
+            if mr_type in ("managed", "managed-pool"):
+                for typ in [
+                    "column_view::get_data",
+                    "mutable_column_view::get_data",
+                    "gather",
+                    "hash_join",
+                ]:
+                    plc.experimental.enable_prefetching(typ)
+
+        return {
+            "engine": pl.GPUEngine(
+                device=device,
+                memory_resource=mr,
+                raise_on_fail=True,
+                executor_options=executor_options,
+                executor=settings.run.polars_gpu_executor,
+            )
+        }
 
 
 def run_query(query_number: int, lf: pl.LazyFrame) -> None:
@@ -139,7 +185,6 @@ def run_query(query_number: int, lf: pl.LazyFrame) -> None:
     if sum([eager, streaming, new_streaming, gpu]) > 1:
         msg = "Please specify at most one of eager, streaming, new_streaming or gpu"
         raise ValueError(msg)
-
 
     collect_kwargs = obtain_engine_config()
     if settings.run.polars_show_plan:
