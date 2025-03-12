@@ -1,3 +1,20 @@
+[project]
+name = "polars-benchmark"
+version = "0.0.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "linetimer>=0.1.5",
+    "polars>=1.21.0",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.8.1",
+]
+
+polars = [
+    "polars==1.24.0",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
@@ -86,3 +103,34 @@ module = [
   "plotnine.*",
 ]
 follow_imports = "skip"
+
+[[tool.uv.index]]
+name = "rapidsai-wheels-nightly"
+url = "https://pypi.anaconda.org/rapidsai-wheels-nightly/simple"
+
+[dependency-groups]
+gpu = [
+    "cudf-polars-cu12>=25.2.2",
+    "dask-cuda>=25.2.0",
+    "packaging>=24.2",
+    "polars[gpu]>=1.21.0",
+    "rmm-cu12>=25.2.0",
+    "ucx-py-cu12>=0.42.0",
+]
+
+[tool.uv.sources]
+cudf-polars-cu12 = { git = "https://github.com/rjzamora/cudf.git", rev = "81d225799849e4739108bb61fcadd50bcaf3b903", subdirectory = "python/cudf_polars"}
+pylibcudf = { index = "rapidsai-wheels-nightly" }
+libcudf = { index = "rapidsai-wheels-nightly" }
+rmm-cu12 = { index = "rapidsai-wheels-nightly" }
+
+[tool.uv]
+override-dependencies = [
+  "libcudf-cu12==25.4.0a329",
+  "pylibcudf-cu12==25.4.0a329",
+  "rmm-cu12==25.4.0a44",
+  "librmm-cu12==25.4.0a44",
+]
+
+[tool.uv.pip]
+prerelease = "allow"
