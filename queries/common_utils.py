@@ -20,10 +20,11 @@ if TYPE_CHECKING:
 settings = Settings()
 
 
-def get_table_path(table_name: str) -> Path:
+def get_table_path(table_name: str) -> str:
     """Return the path to the given table."""
     ext = settings.run.io_type if settings.run.include_io else "parquet"
-    return settings.dataset_base_dir / f"{table_name}.{ext}"
+    base = str(settings.dataset_base_dir).rstrip("/")
+    return f"{base}/{table_name}.{ext}"
 
 
 def log_query_timing(

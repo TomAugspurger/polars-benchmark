@@ -15,13 +15,19 @@ from settings import Settings
 settings = Settings()
 
 
+def _get_storage_options() -> dict[str, str] | None:
+    if settings.paths.storage_options:
+        return settings.paths.storage_options.model_dump()
+    return None
+
+
 def _scan_ds(table_name: str) -> pl.LazyFrame:
     path = get_table_path(table_name)
 
     if settings.run.io_type == "skip":
         return pl.read_parquet(path, rechunk=True).lazy()
     if settings.run.io_type == "parquet":
-        return pl.scan_parquet(path)
+        return pl.scan_parquet(path, storage_options=_get_storage_options())
     elif settings.run.io_type == "feather":
         return pl.scan_ipc(path)
     elif settings.run.io_type == "csv":
@@ -190,7 +196,7 @@ def run_query(query_number: int, lf: pl.LazyFrame) -> None:
     else:
         query = partial(
             lf.collect,
-            streaming=streaming,
+            # streaming=streaming,
             new_streaming=new_streaming,
             no_optimization=eager,
             engine=engine,

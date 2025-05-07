@@ -6,19 +6,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 IoType: TypeAlias = Literal["skip", "parquet", "feather", "csv"]
 
+class StorageOptions(BaseSettings):
+    endpoint_url: str = "http://localhost:9000"
+    aws_region: str = "us-east-1"
+    aws_access_key_id: str = "minioadmin"
+    aws_secret_access_key: str = "minioadmin"
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
 
 # Set via PATH_<NAME>
 class Paths(BaseSettings):
     answers: Path = Path("data/answers")
-    tables: Path = Path("data/tables")
+    tables: Path | str = Path("data/tables")
 
     timings: Path = Path("output/run")
     timings_filename: str = "timings.csv"
 
+    # TODO: joint validation of storage_options and tables.
+    # StorageOptions being present should imply that tables is a str like s3://<bucket>
+    storage_options: StorageOptions | None = None
     plots: Path = Path("output/plot")
 
     model_config = SettingsConfigDict(
-        env_prefix="path_", env_file=".env", extra="ignore"
+        env_prefix="path_", env_file=".env", extra="ignore", env_nested_delimiter="__"
     )
 
 
@@ -75,6 +86,7 @@ class Plot(BaseSettings):
     )
 
 
+
 class Settings(BaseSettings):
     scale_factor: float = 1.0
 
@@ -84,7 +96,14 @@ class Settings(BaseSettings):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def dataset_base_dir(self) -> Path:
-        return self.paths.tables / f"scale-{self.scale_factor}"
+    def dataset_base_dir(self) -> Path | str:
+        if self.paths.storage_options is not None:
+            assert isinstance(self.paths.tables, str)
+            return self.paths.tables.rstrip("/") + f"/scale-{self.scale_factor}"
+        else:
+            assert isinstance(self.paths.tables, Path)
+            return self.paths.tables / f"scale-{self.scale_factor}"
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", env_nested_delimiter="__"
+    )
