@@ -158,5 +158,32 @@ RUN_POLARS_GPU=1 \
 ## Logs
 
 ```
-coiled logs --system --no-color '{id}' | grep -i 'Code block' > 'logs-{type}.txt'
+coiled logs --no-color '{id}' | grep -i 'Code block' > 'logs-{type}.txt'
+```
+
+## Locallay with MinIO
+
+
+You run this locally with MinIO in a docker container. Use `-v {local-path}:/data`
+to persist data after the docker container exits.
+
+```
+docker run -p 9000:9000 -p 9001:9001 \
+    --rm \
+    -v /datasets/toaugspurger:/data \
+    quay.io/minio/minio server /data --console-address ":9001"
+```
+
+The default credentials are
+
+- `AWS_ACCESS_KEY_ID`: `minioadmin`
+- `AWS_SECRET_ACCESS_KEY`: `minioadmin`
+
+and you'll need to use the endpoint URL `http://localhost:9000`.
+
+You'll need to create a Bucket and upload data. For example, using the S3 API:
+
+```
+aws s3api create-bucket --bucket pds --endpoint-url http://localhost:9000/
+aws s3 cp data/tables/ s3://pds/ --recursive --endpoint-url http://localhost:9000/
 ```
