@@ -7,10 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 IoType: TypeAlias = Literal["skip", "parquet", "feather", "csv"]
 
 class StorageOptions(BaseSettings):
-    endpoint_url: str = "http://localhost:9000"
     aws_region: str = "us-east-1"
     aws_access_key_id: str = "minioadmin"
     aws_secret_access_key: str = "minioadmin"
+    aws_session_token: str | None = None
+    endpoint_url: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

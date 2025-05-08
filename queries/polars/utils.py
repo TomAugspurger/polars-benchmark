@@ -10,14 +10,14 @@ from queries.common_utils import (
     get_table_path,
     run_query_generic,
 )
-from settings import Settings
+from queries.settings import Settings
 
 settings = Settings()
 
 
 def _get_storage_options() -> dict[str, str] | None:
     if settings.paths.storage_options:
-        return settings.paths.storage_options.model_dump()
+        return settings.paths.storage_options.model_dump(exclude_none=True)
     return None
 
 

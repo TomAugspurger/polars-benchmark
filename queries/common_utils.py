@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from linetimer import CodeTimer
 
-from settings import Settings
+from queries.settings import Settings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
