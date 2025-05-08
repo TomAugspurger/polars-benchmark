@@ -1,0 +1,27 @@
+name: polars-benchmark-runner
+channels:
+  - rapidsai-nightly
+  - conda-forge
+dependencies:
+  - plotly>=6.0.1
+  - plotnine>=0.14.5
+  - polars>=1.26.0
+  - pydantic>=2.11.4
+  - pydantic-settings>=2.9.1
+  - cudf-polars>=25.6.0.dev0
+  - dask-cuda>=25.6.0.dev0
+  - kvikio>=25.6.0.dev0
+  - libcudf>=25.6.dev0
+  - libkvikio>=25.6.0.dev0
+  - librmm>=25.4.0.dev0
+  - pylibcudf>=25.6.0.dev0
+  - rapids-dask-dependency>=25.6.0.dev0
+  - rapids-logger>=0.0.0.dev0
+  - rmm>=25.6.0.dev0
+  - ipython
+  - coiled
+  - pip
+  - pip:
+    - linetimer
+platforms:
+  - linux-64

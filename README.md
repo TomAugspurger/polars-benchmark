@@ -43,3 +43,50 @@ This will do the following,
 - Create a new virtual environment with all required dependencies.
 - Generate data for benchmarks.
 - Run the benchmark suite.
+
+
+# Remote I/O
+
+You can configure cloud / remote I/O by setting the `StorageOptions` parameters.
+For example, using a local minio server in a docker contaienr:
+
+```
+docker network create polars-bench
+docker run -p 9000:9000 -p 9001:9001 \
+    -v /path/to/local:/data \
+    --name minio --network polars-bench \
+    -d \
+    quay.io/minio/minio server /data --console-address ":9001"
+```
+
+Then create the bucket and copy the data (using the AWS CLI for example. This assumes you've configured it already)
+
+```
+aws s3api create-bucket --bucket pds --endpoint-url http://localhost:9000/
+aws s3 cp data/tables/ s3://pds/ --recursive --endpoint-url http://localhost:9000/
+```
+
+This assumes all the tables go in the `pds` bucket with a layout like `s3://pds/scale-{factor}/...`.
+
+Then run the polars benchmarks:
+
+```
+PATH_TABLES=s3://pds/ \
+    SCALE_FACTOR=1.0  \
+    PATH_STORAGE_OPTIONS__AWS_DEFAULT_REGION=us-east-1 \
+    PATH_STORAGE_OPTIONS__AWS_ACCESS_KEY_ID=minioadmin \
+    PATH_STORAGE_OPTIONS__AWS_SECRET_ACCESS_KEY=minioadmin \
+    PATH_STORAGE_OPTIONS__AWS_ENDPOINT_URL="http://localhost:9000" \
+    python -m queries.polars.q1
+```
+
+AWS_ACCESS_KEY_ID=minioadmin \
+    AWS_SECRET_ACCESS_KEY=minioadmin \
+    AWS_DEFAULT_REGION=us-east-1 \
+    AWS_ENDPOINT_URL="http://minio:9000" \
+    RUN_POLARS_GPU=True \
+    PATH_STORAGE_OPTIONS__ENDPOINT_URL=http://minio:9000 \
+    PATH_STORAGE_OPTIONS__AWS_ACCESS_KEY_ID=minioadmin \
+    PATH_STORAGE_OPTIONS__AWS_SECRET_ACCESS_KEY=minioadmin \
+    PATH_TABLES=s3://pds/ SCALE_FACTOR=10.0  \
+    python -m queries.polars.q1
