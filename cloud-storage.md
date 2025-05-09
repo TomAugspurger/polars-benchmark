@@ -73,6 +73,7 @@ coiled batch run \
     --secret-env AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
     --secret-env AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
     --env AWS_DEFAULT_REGION=us-east-1 \
+    --env KVIKIO_NTHREADS=128 \
     --secret-env AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
     --secret-env PATH_STORAGE_OPTIONS__AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
     --secret-env PATH_STORAGE_OPTIONS__AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
@@ -85,6 +86,9 @@ coiled batch run \
 ```
 
 Change the module to `queries.polars.q{id}` to run a specific query if you want.
+
+Note that we set `KVIKIO_NTHREADS` on the env. We'll probably adjust kvikio to
+somehow make that unnecessary.
 
 ### Locally, Remote data, CPU:
 
